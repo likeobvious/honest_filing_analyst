@@ -46,7 +46,12 @@ data/pdfs/*.pdf
 # ── PostgreSQL data volume ────────────────────────────────────────────────────
 pg_data/
 
-# ── Test artifacts ────────────────────────────────────────────────────────────
-eval/token_log_*.csv
-eval/results_*.json
-docs/MEASUREMENT_REPORT_DAY4.md
+# ── Root scratch / planning notes (tracked in references/) ───────────────────
+*.txt
+ps5_honest_filing_analyst_design_doc.md
+ps5_honest_filing_analyst_eraser_design_doc (2).md
+ps5_honest_filing_analyst_eraser_design_doc (3).md
+PS5 Honest Filing Analyst.md
+IMPLEMENTATION_GUIDE_AND_TEAM_PLAN.md
+execution_plan.md
+
