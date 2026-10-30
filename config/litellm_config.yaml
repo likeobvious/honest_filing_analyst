@@ -1,0 +1,76 @@
+# LiteLLM Proxy Configuration — PS5: Honest Filing Analyst
+# 20 RPM hard rate limit, PostgreSQL token audit logging, Groq → OpenRouter failover
+# Reference: RFC-PS5-2026-001, Section 3.5
+
+model_list:
+  # Primary LLM: Groq Llama-3.3-70B (free tier, fast inference)
+  - model_name: filing-analyst-llm
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+      rpm: 20
+      timeout: 3.2
+      max_retries: 0
+      max_tokens: 250  # Hard cap per PS5 token budget (stretch: <=80k total / 40 questions)
+
+  # Fallback LLM: OpenRouter (free Llama-3.3-70B) — activates on Groq 429/503
+  - model_name: filing-analyst-llm-fallback
+    litellm_params:
+      model: openrouter/meta-llama/llama-3.3-70b-instruct:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      rpm: 20
+      timeout: 3.8
+      max_retries: 0
+      max_tokens: 250
+
+  # Secondary fallback: Google Gemini Flash (free tier)
+  - model_name: filing-analyst-llm-fallback-2
+    litellm_params:
+      model: openrouter/google/gemini-2.0-flash-exp:free
+      api_key: os.environ/OPENROUTER_API_KEY
+      rpm: 15
+      timeout: 4.0
+      max_retries: 0
+      max_tokens: 250
+
+litellm_settings:
+  # Drop unsupported parameters silently
+  drop_params: true
+
+  # Callbacks for PostgreSQL token audit logging (every prompt + completion logged)
+  success_callback: ["postgres"]
+  failure_callback: ["postgres"]
+
+  # Single retry: Groq fails → try OpenRouter (within FastAPI's circuit breaker timeout)
+  num_retries: 1
+
+  # Automatic failover chain: Groq → OpenRouter → Gemini
+  fallbacks:
+    - filing-analyst-llm:
+        - filing-analyst-llm-fallback
+        - filing-analyst-llm-fallback-2
+
+  # Rate limit pacing: 20 RPM hard limit (3.0s minimum between requests per key)
+  rpm_limit: 20
+
+  # Request/response logging for AI_LOG.md and measurement report
+  set_verbose: false  # Set true during debugging
+
+router_settings:
+  # Route all requests through the primary model with automatic failover
+  routing_strategy: simple-shuffle
+  model_group_alias:
+    filing-analyst-llm: filing-analyst-llm
+
+general_settings:
+  # Master key for admin access (set via LITELLM_MASTER_KEY env var)
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # PostgreSQL connection for SpendLogs table (tracks every token for measurement report)
+  database_url: os.environ/DATABASE_URL
+
+  # Store model metadata in DB for spend analysis
+  store_model_in_db: true
+
+  # Disable UI dashboard (not needed; saves RAM on 4GB B2s)
+  ui_access_mode: "off"
