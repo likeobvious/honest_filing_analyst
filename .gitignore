@@ -1,0 +1,52 @@
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# ── Large binary artifacts (indices, models) ──────────────────────────────────
+# Models are downloaded at build time or via `make download-models`
+# Do NOT commit these — they are too large for git
+models/bge-small-en-v1.5-onnx-int8/
+models/bge-reranker-base-onnx-int8/
+models/*.onnx
+data/indices/faiss.index
+data/indices/bm25.pkl
+data/indices/chunks.sqlite
+
+# ── Raw 10-K PDFs (large files) ───────────────────────────────────────────────
+# Stored in data/pdfs/ — not tracked in git (too large)
+# Download via `make download-pdfs` using FinanceBench scripts
+data/pdfs/*.pdf
+
+# ── PostgreSQL data volume ────────────────────────────────────────────────────
+pg_data/
+
+# ── Test artifacts ────────────────────────────────────────────────────────────
+eval/token_log_*.csv
+eval/results_*.json
+docs/MEASUREMENT_REPORT_DAY4.md
