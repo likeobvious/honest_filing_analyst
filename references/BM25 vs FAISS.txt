@@ -1,0 +1,23 @@
+  In simple terms, BM25 and FAISS are two completely different ways of searching documents. We combine them ("Hybrid Search") because neither one is
+  smart enough to handle financial reports on its own.
+  ──────
+  ### 1. BM25: The "Exact Keyword Matcher" (Lexical Search)
+
+  • What it is: An advanced, highly optimized keyword-matching algorithm (an improved version of TF-IDF used in search engines).
+  • How it works: It looks for the exact words and numbers you typed into the search bar, scoring pages higher if those rare words appear frequently.
+  • Superpower: Perfect for exact financial codes, ticker symbols, and accounting jargon.
+      • Example: If someone searches "ASC 842", "Item 1A", "TSLA", or "2023", BM25 finds the exact page in milliseconds (< 15 ms).
+  • Weakness: It has zero understanding of meaning or synonyms.
+      • If the user asks "money spent on factories", BM25 will fail to find the section titled "Capital Expenditures" because none of the exact words
+      match.
+
+  ──────
+  ### 2. FAISS: The "Meaning & Concept Matcher" (Vector Search)
+
+  • What it is: Facebook AI Similarity Search — an open-source library built by Meta (Facebook).
+  • How it works: An embedding model converts your question and all PDF chunks into arrays of numbers (vectors). FAISS then plots them in multi-
+  dimensional space and finds the chunks closest in meaning.
+  • Superpower: Understands concepts, context, and synonyms.
+      • Example: If someone searches "cash burn rate", FAISS easily finds "free cash flow deficit" or "operational liquidity decline".
+  • Weakness: It is terrible at distinguishing subtle numbers or exact codes.
+      • To an embedding model, the number "2022" and "2023" look virtually identical because they appear in the exact same sentence contexts!

@@ -1,0 +1,18 @@
+ # Level 1: The Pre-LLM Gate (Saves Money & Tokens — 0 Tokens Used)
+
+  Before we even touch or pay for the LLM, our local Python code checks two things:
+
+  1. The Company/Year Check: If the user asks about "Nike", our code checks the local folder. If Nike isn't in our folder, it immediately replies "Not in
+   the documents" in 15 milliseconds without using a single LLM token.
+  2. The Similarity Score Check: Our local reranker model scores the best matching pages from +10 (great match) down to -10 (irrelevant). If the best
+  page scores below -1.50, it means our files don't have relevant information. We stop and output "Not in the documents" right away.
+
+
+
+  #Level 2: The Verification Gate (For tricky/subtle questions)
+
+  If the company is in the folder, but the specific detail is missing (e.g. asking for "Apple's budget for employee snacks"):
+
+  • We send the pages to the LLM with a strict rule: "If this exact metric isn't in the text, you MUST select NOT_IN_DOCUMENTS."
+  • If the LLM tries to guess an answer anyway, our code checks: "Did you quote an exact sentence from the PDF page?" If that quote isn't on the page,
+  the gate overrides the LLM and forces the answer to "Not in the documents".
