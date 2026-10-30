@@ -1,0 +1,91 @@
+services:
+  # ── PostgreSQL 16: LiteLLM Token Audit Database ──────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ps5-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-litellm_secret}
+      POSTGRES_DB: litellm_db
+    command: >
+      postgres
+        -c shared_buffers=64MB
+        -c work_mem=4MB
+        -c maintenance_work_mem=32MB
+        -c max_connections=25
+        -c log_min_duration_statement=1000
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - ps5-net
+
+  # ── LiteLLM Proxy: 20 RPM Rate Limiter + Token Logger ───────────────────────
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm-database:main-stable
+    container_name: ps5-litellm-proxy
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:-litellm_secret}@postgres:5432/litellm_db
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-ps5-master-key}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    ports:
+      - "4000:4000"
+    mem_limit: 384m
+    networks:
+      - ps5-net
+
+  # ── Honest Analyst App: FastAPI + ONNX Models + BM25/FAISS ──────────────────
+  honest-analyst-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ps5-honest-analyst-app
+    restart: unless-stopped
+    depends_on:
+      - litellm-proxy
+      - postgres
+    environment:
+      LITELLM_BASE_URL: http://litellm-proxy:4000/v1
+      LITELLM_API_KEY: ${LITELLM_VIRTUAL_KEY:-sk-ps5-team-key}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:-litellm_secret}@postgres:5432/litellm_db
+      DATA_DIR: /app/data
+      MODELS_DIR: /app/models
+      FRONTEND_DIR: /app/frontend
+      OMP_NUM_THREADS: "2"
+      ORT_INTRA_OP_NUM_THREADS: "2"
+      OMP_WAIT_POLICY: "PASSIVE"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models:ro
+    ports:
+      - "80:8000"
+    mem_limit: 2400m
+    networks:
+      - ps5-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+networks:
+  ps5-net:
+    driver: bridge
+
+volumes:
+  pg_data:
