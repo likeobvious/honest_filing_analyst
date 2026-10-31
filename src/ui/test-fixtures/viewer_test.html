@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synthetic PDF.js Viewer Test</title>
+  <style>
+    body { max-width: 760px; margin: 40px auto; padding: 0 20px; color: #17243a; font: 15px/1.6 system-ui, sans-serif; }
+    .warning { padding: 12px 14px; border: 1px solid #f59e0b; border-radius: 8px; background: #fffbeb; }
+    li { margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthetic PDF.js viewer test</h1>
+  <p class="warning"><strong>TEST FIXTURES ONLY:</strong> These synthetic documents are not SEC filings and contain no real company data.</p>
+  <p>Open each citation to exercise PDF loading, physical-page selection, navigation, document switching, and quote highlighting.</p>
+  <ul>
+    <li>
+      <a class="citation-link" href="./synthetic-viewer-fixture.pdf#page=2"
+        data-pdf-filename="SYNTHETIC TEST ONLY — synthetic-viewer-fixture.pdf"
+        data-verbatim-quote="Expenses totaled 37 million synthetic units.">Synthetic document, page 2</a>
+    </li>
+    <li>
+      <a class="citation-link" href="./synthetic-second-viewer-fixture.pdf#page=1"
+        data-pdf-filename="SYNTHETIC TEST ONLY — synthetic-second-viewer-fixture.pdf"
+        data-verbatim-quote="Different PDF loaded successfully.">Different synthetic document, page 1</a>
+    </li>
+    <li>
+      <a class="citation-link" href="./synthetic-viewer-fixture.pdf#page=99"
+        data-pdf-filename="SYNTHETIC TEST ONLY — invalid physical page"
+        data-verbatim-quote="Revenue increased by 12% in the synthetic test filing.">Invalid page-number test</a>
+    </li>
+    <li>
+      <a class="citation-link" href="./missing-synthetic-fixture.pdf#page=1"
+        data-pdf-filename="SYNTHETIC TEST ONLY — missing PDF"
+        data-verbatim-quote="">Missing PDF loading-error test</a>
+    </li>
+  </ul>
+  <script type="module" src="../pdf_viewer.js"></script>
+  <script type="module" src="./viewer_test.js"></script>
+</body>
+</html>

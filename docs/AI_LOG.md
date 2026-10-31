@@ -68,3 +68,86 @@ This log documents prompts given to AI coding tools during the architectural des
   - Layer 2: Heuristic imperative phrase neutralization.
   - Layer 3: Cryptographic random-nonce XML sandboxing (`<untrusted_filing_data_{nonce}>`) with HTML entity escaping (`<` $\to$ `&lt;`) and post-data sandwich prompting.
   - Layer 4: Deterministic post-generation verbatim substring verification against physical page text.
+
+---
+
+# Development Activity Log — Teammate 3 Deliverables
+
+**Date recorded:** 2026-10-31
+**AI tool used:** AI assistant using Copilot SDK in VS Code
+**Record scope:** The entries below document the Teammate 3 work performed in this workspace on the date above. Prompt descriptions are concise summaries of the actual requests in the conversation, not purported verbatim transcripts. No independent AI coding tool or remote code-generation service was used.
+
+## Frontend development
+
+- **Development task:** Implement the Honest Filing Analyst research interface and connect it to the existing query and health APIs.
+- **Prompt given to AI (summary):** Build a professional responsive financial research UI in `src/ui/index.html` and `src/ui/app.js`; read the real Pydantic response schemas; safely render answer, numeric emphasis, math result, citations, errors, health, and cache/provider/outage banners; do not modify backend files.
+- **Files modified:** `src/ui/index.html`, `src/ui/app.js`.
+- **Code generated or assisted:** Semantic responsive dashboard markup and styling; client-side query submission to `POST /api/v1/query`; health request to `GET /api/v1/health`; response rendering for `answer`, `citations`, `is_abstention`, `is_fallback_mode`, `tokens_used`, `latency_ms`, `math_result`, and `system_status`; citation links using the existing `/pdfs/{filename}` route and physical `#page=N`; status notifications; request/loading/error handling.
+- **Changes after reviewing AI output:** Used the actual `app/schemas.py` names and nested `system_status` fields instead of inventing fields. Changed cache-hit token display to `0` for the current cache lookup even if the cached response contains the original request's token count. Filing-derived strings use DOM text nodes and `textContent`, not raw HTML insertion.
+- **Architectural decisions:** Kept the API base same-origin by default; optional `apiBase` query parameter and HTML `api-base` meta setting allow a separately hosted UI. Used backend `/pdfs/{filename}` route, not a path guessed from reference documentation. No backend files were changed.
+- **Problems encountered:** FastAPI and Docker currently point to `frontend/`, whereas this assignment's UI location is `src/ui/`. The backend serves `/pdfs/{filename}`. These deployment-path mismatches were not changed because the frontend task prohibited backend changes.
+- **Verification performed:** `node --check src/ui/app.js` passed. Browser checks against mocked API responses verified rendering of answers, calculation values, citation URLs, cache/provider/outage banners, health status, and HTML-like citation text as text rather than executable markup.
+- **Not verified:** No live API/backend integration or actual PDF delivery was tested.
+
+## PDF.js integration
+
+- **Development task:** This section tracks the requested PDF.js viewer work and its current status.
+- **Prompt given to AI:** No separate implementation prompt for a PDF.js viewer was issued in the frontend task recorded above.
+- **Files modified:** None for PDF.js. No `src/ui/pdf_viewer.js`, PDF.js distribution, or PDF.js worker was created.
+- **Code generated or assisted:** The frontend renders source citations as links to the existing backend PDF endpoint with `#page=N`. This uses the browser's PDF handling; it is not a PDF.js viewer or quote-highlighting implementation.
+- **Changes after reviewing AI output:** Not applicable; PDF.js code was not generated.
+- **Architectural decisions:** Do not imply that PDF.js, a split pane, or snippet highlighting exists. The existing `/pdfs/{filename}` endpoint is the only inspected PDF-serving contract.
+- **Problems encountered:** PDF.js assets and PDF files were not present in the checkout during inspection. Adding a working PDF.js integration therefore remains outstanding.
+- **Verification performed:** The citation URL and rendered citation text were checked in the UI using mocked data.
+- **Not verified / follow-up:** No PDF.js rendering, page navigation inside a PDF.js viewer, or quote highlighting was implemented or tested. Complete this section with the actual implementation and test details if that work is later performed.
+
+## Benchmark dataset
+
+- **Development task:** Create the 45-question golden benchmark JSON with five defined category counts and evidence-aware fields.
+- **Prompt given to AI (summary):** Inspect the actual PDFs and benchmark source first; do not invent answers; use real filenames and physical page numbers; create 15 factual, 13 comparison/calculation, 7 synthesis, 5 unanswerable, and 5 adversarial questions using the requested machine-readable schema.
+- **Files modified:** `eval/golden_test_set.json`.
+- **Code generated or assisted:** A 45-entry JSON question inventory with IDs, categories, question text, nullable expected answers and numeric values, citation arrays, expected status, tolerance, canary strings, evidence status, and a validation note.
+- **Changes after reviewing AI output:** Recursive repository inspection found no PDFs, benchmark source files, or poisoned PDFs. Rather than invent financial answers or page citations, marked the dataset `BLOCKED_PENDING_CORPUS_AND_POISONED_PDFS`; placeholders and all unavailable evidence are explicitly identified. Candidate absent-company and undisclosed-metric cases are also marked unverified, not asserted as proven corpus facts.
+- **Architectural decisions:** A question without verified filing evidence must not be treated as scored ground truth. Adversarial canaries listed in the design materials are provisional until checked against actual planted PDFs.
+- **Problems encountered:** Required corpus, FinanceBench source data, and poisoned PDF fixtures were unavailable.
+- **Verification performed:** Parsed the JSON and checked the exact total of 45, unique IDs, category counts `15/13/7/5/5`, required question fields, and citation/canary container types.
+- **Not verified:** No financial answer, source page, corpus-absence assertion, or poisoned-PDF behavior could be verified.
+
+## Evaluation harness
+
+- **Development task:** Implement the automated evaluator for sequential API requests, scoring, latency, token logging, and detailed reports.
+- **Prompt given to AI (summary):** Load the golden JSON; post questions sequentially to `/api/v1/query`; pace at 3.2 seconds; record each response and `perf_counter()` latency; compute p50/p95; score textual/numeric answers, citations, abstentions, and canaries; query the configured PostgreSQL spend logs in the run time window; handle CLI subsets and failures without inventing results.
+- **Files modified:** `eval/run_eval.py`.
+- **Code generated or assisted:** Command-line JSON benchmark loader, category/limit selection, sequential HTTP client, response-shape validation, per-question result capture, numeric relative-tolerance scoring (0.5% default), citation filename/page matching, abstention and canary checks, percentile calculations, PostgreSQL token query, Docker Compose `psql` fallback, and timestamped JSON report generation.
+- **Changes after reviewing AI output:** Ground-truth scores are eligible only when expected evidence is marked verified and expected answers are populated. Provisional abstention and injection findings are not reported as proof of the five-of-five targets. Missing token-log information is represented as unavailable rather than zero. Added response-shape checks so malformed successful HTTP bodies are recorded as errors.
+- **Architectural decisions:** Use the project’s documented `LiteLLM_SpendLogs` table and inclusive `"startTime"` run bounds, with the Compose `postgres` service as the local default path. No dependency manifest changes were needed.
+- **Problems encountered:** `ruff` was not installed/available in the environment. The benchmark remains provisional because source documents are absent.
+- **Verification performed:** Python compilation passed. A local mock API exercised numeric scoring, citation matching, abstention validation, canary detection, malformed JSON response handling, and skipped/unavailable token reporting. Separate checks covered the 0.5% numeric tolerance boundary, p95 interpolation, and the actual benchmark's 45 entries/category counts. An unavailable local API endpoint was recorded in a temporary report as an error with unavailable tokens.
+- **Not verified:** No live backend benchmark was run; no real PostgreSQL token totals, accuracy score, latency target, or production token target were measured.
+
+## Outage testing
+
+- **Development task:** Implement a guarded local Compose outage drill for the LiteLLM proxy and verify fallback and recovery behavior.
+- **Prompt given to AI (summary):** Confirm Compose services; run a normal evaluation; require safety confirmation before stopping the local proxy; send five outage requests and measure each under five seconds; verify top-four evidence and physical citations; restart the proxy with a trap; wait for health; confirm normal inference; never target remote infrastructure.
+- **Files modified:** `eval/test_outage_fallback.sh`.
+- **Code generated or assisted:** Bash script with actual Compose service names from `docker-compose.yml` (`postgres`, `litellm-proxy`, `honest-analyst-app`); local Docker context checks; project-file-scoped Compose commands; explicit typed confirmation; backend/index preflight; baseline evaluator call; five outage requests; latency, fallback mode, passage count, citation filename/page assertions; proxy readiness polling; post-restart inference check; and exit cleanup that attempts to restart the proxy.
+- **Changes after reviewing AI output:** Armed the restart trap before stopping the proxy; refused noninteractive confirmation and remote Docker endpoints; required the baseline response to be a normal `LLM_SYNTHESIZED` response before proceeding; preserved an outage window configurable by environment variable; used backend `/api/v1/health` and the Compose service name `litellm-proxy`.
+- **Architectural decisions:** The script operates only with the checked-out Compose file and a local Docker context. A successful recovery requires a non-fallback synthesized response and positive token usage, not merely a responsive HTTP status.
+- **Problems encountered:** The current environment does not provide a usable WSL Bash; Git for Windows Bash was used for syntax validation. No live local Docker stack or outage run was executed.
+- **Verification performed:** `bash -n` passed under Git for Windows Bash. A remote `DOCKER_HOST=tcp://...` safety test was refused before any Compose operation. Script source checks confirmed the confirmation guard precedes the stop operation and that cleanup restart is armed before stopping.
+- **Not verified:** No container was stopped; no five-query outage drill, real proxy health wait, or post-restart inference check was performed. Do not report the outage target as passed until the script has been run against the intended local test stack and its output reviewed.
+
+## Review follow-up
+
+- **Date:** 2026-10-31
+- **Development task:** Review Teammate 3 deliverables for API/UI alignment, test validity, rate limiting, outage safety, and design consistency.
+- **AI tool used:** AI assistant using Copilot SDK in VS Code.
+- **Prompt given to AI (summary):** Perform a senior-engineer review of the assigned UI, benchmark, evaluation runner, outage script, AI log, and Day 4 report; run safe checks; fix bugs only in assigned files; report incomplete work and exact demo commands.
+- **Files modified:** `eval/run_eval.py`, `eval/test_outage_fallback.sh`, `docs/AI_LOG.md`.
+- **Code generated or assisted:** The evaluator now rejects request intervals below 3.2 seconds, combines verified abstention outcomes with answerable-question results for the 40-question accuracy metric, reports the 70% pass and 80% stretch thresholds, and includes accuracy failure in `--fail-on-targets`. The outage script rejects API/proxy endpoint URLs that are not localhost or loopback IPs.
+- **Changes after reviewing AI output:** Changed the evaluator's 20-RPM guard from permitting arbitrary intervals to requiring the documented 3.2-second minimum. Tightened outage script local-only checks to cover both API/proxy URLs in addition to the Docker context.
+- **Architectural decisions:** Keep PDF.js and quote highlighting marked incomplete: `src/ui/pdf_viewer.js` and PDF.js assets are absent. Do not create a Day 4 report with invented measurements; `docs/MEASUREMENT_REPORT_DAY4.md` is absent and needs actual benchmark data.
+- **Problems encountered:** No PDFs, poisoned fixtures, measurement report, or live Compose stack were present. `ruff` was unavailable. The environment's WSL Bash launcher was unusable; Git for Windows Bash was used for shell syntax checks.
+- **Verification performed:** Recompiled the evaluator, confirmed CLI help, checked that an interval below 3.2 seconds is rejected, checked aggregate accuracy with a verified abstention, verified p50/p95 outputs, syntax-checked the outage script with Git Bash, and confirmed remote Docker/API targets are rejected before container actions. `node --check` and `git diff --check` also passed.
+- **Test limitation:** The existing `python -m unittest discover -s tests -p test_teammate1.py -v` command was attempted, but test discovery stopped on `ModuleNotFoundError: No module named 'pydantic'`; the project requirements were not installed as part of this review.
+- **Not verified:** No live API benchmark, PostgreSQL token query, actual PDF citation destination, PDF.js viewer, or proxy outage/recovery drill was run.
