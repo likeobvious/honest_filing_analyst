@@ -157,14 +157,33 @@ class ONNXCrossEncoderReranker:
     def _score_stub(self, query: str, text: str) -> float:
         """Deterministic heuristic scoring when model weights are not present."""
         q_norm = re.sub(r"\bfy(\d{2,4})\b", r"\1", query.lower())
-        stopwords = {"what", "was", "were", "is", "are", "the", "in", "for", "of", "and", "to", "a", "an", "how", "much", "many"}
-        q_words = set(re.findall(r"[a-z0-9]+", q_norm)) - stopwords
+        stopwords = {
+            "what", "was", "were", "is", "are", "the", "in", "for", "of", "and", "to",
+            "a", "an", "how", "much", "many", "s", "year", "years", "did", "does", "by", "from"
+        }
+        tokens = re.findall(r"[a-z0-9]+", q_norm)
+        q_words = {w for w in tokens if len(w) > 1 and w not in stopwords}
         t_words = set(re.findall(r"[a-z0-9]+", text.lower()))
         if not q_words:
             return -5.0
         overlap = len(q_words & t_words) / len(q_words)
-        boost = 0.5 if "consolidated statements" in text.lower() or "operations" in text.lower() else 0.0
-        return -2.5 + (overlap * 4.0) + boost
+        score = -2.5 + (overlap * 4.0)
+
+        # Quantitative / financial statement boost
+        fin_terms = {
+            "revenue", "income", "sales", "margin", "earnings", "eps", "operating",
+            "profit", "assets", "liabilities", "cash", "debt", "expense", "expenses"
+        }
+        has_fin_q = bool(q_words & fin_terms)
+        has_fin_t = bool(t_words & fin_terms)
+        has_numbers = bool(re.search(r"(\$|usd|\b\d{1,3}(?:,\d{3})+\b|\b\d+\.\d+\b)", text.lower()))
+        if has_fin_q and has_fin_t and has_numbers:
+            score += 1.5
+
+        if "consolidated statements" in text.lower() or "summary results" in text.lower() or "operations" in text.lower():
+            score += 0.5
+
+        return score
 
     def rerank(
         self,

@@ -45,12 +45,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
 # Config from environment
-DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
 INDEX_DIR = Path(os.getenv("INDEX_DIR", str(DATA_DIR / "indices")))
-MODELS_DIR = Path(os.getenv("MODELS_DIR", "models"))
+MODELS_DIR = Path(os.getenv("MODELS_DIR", str(BASE_DIR / "models")))
 PDF_DIR = Path(os.getenv("PDF_DIR", str(DATA_DIR / "pdfs")))
-UI_DIR = Path(os.getenv("UI_DIR", "src/ui"))
+UI_DIR = Path(os.getenv("UI_DIR", str(BASE_DIR / "src/ui")))
 LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "sk-ps5-team-key")
 
@@ -237,7 +239,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         top_passages, max_logit, should_abstain = rr.rerank(
             query=request.question,
             candidates=candidates,
-            top_k=4,
+            top_k=6,
             is_multi_year=is_multi_yr,
             target_years=target_years,
         )
@@ -257,7 +259,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
                 ),
             )
     else:
-        top_passages = candidates[:4]
+        top_passages = candidates[:6]
         max_logit = 0.0
 
     # ── Step 7: Build XML-Sandboxed Prompt ──
@@ -448,6 +450,11 @@ async def health_endpoint() -> HealthResponse:
                 litellm_reachable = res.status_code == 200
         except Exception:
             litellm_reachable = False
+
+    # Check direct provider fallback (Groq / OpenRouter) if LiteLLM proxy container is offline
+    if not litellm_reachable:
+        if os.getenv("GROQ_API_KEY") or os.getenv("OPENROUTER_API_KEY"):
+            litellm_reachable = True
 
     status = "healthy" if (index_loaded and litellm_reachable) else (
         "degraded" if index_loaded else "ready"
