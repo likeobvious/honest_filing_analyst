@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 FISCAL_YEAR_PATTERN = re.compile(
     r"\b(FY|fiscal year|year ended|year ending|for (?:the )?(?:year|period))[\s,]*"
-    r"(20(?:0[0-9]|1[0-9]|2[0-9]|3[0-0]))\b",
+    r"([12][0-9]{3})\b",
     re.IGNORECASE
 )
-BARE_YEAR_PATTERN = re.compile(r"\b(20(?:0[0-9]|1[0-9]|2[0-9]|3[0]))\b")
+BARE_YEAR_PATTERN = re.compile(r"\b([12][0-9]{3})\b")
 
 COMMON_FINANCIAL_WORDS = frozenset([
     "WHAT", "WHEN", "WHERE", "WHICH", "WHO", "WHY", "HOW", "THE", "FOR",
@@ -174,7 +174,7 @@ class QueryParser:
         if not years:
             for m in BARE_YEAR_PATTERN.finditer(question):
                 y = int(m.group(1))
-                if 2000 <= y <= 2030:
+                if 1900 <= y <= 2100:
                     years.add(y)
 
         result.fiscal_years = sorted(years)

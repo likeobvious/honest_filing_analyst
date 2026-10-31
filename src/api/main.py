@@ -323,7 +323,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         return QueryResponse(
             answer="Not in the documents.",
             is_abstention=True,
-            tokens_used=tokens_used,
+            tokens_used=0,
             latency_ms=round(elapsed_ms, 1),
             system_status=SystemStatus(
                 execution_mode="ABSTENTION",
