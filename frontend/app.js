@@ -149,6 +149,8 @@
     const link = document.createElement("a");
     link.className = "citation-link";
     link.href = `${endpoint(`/pdfs/${encodeURIComponent(filename)}`)}#page=${page}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
     link.dataset.pdfFilename = filename;
     link.dataset.pdfPage = String(page);
     link.dataset.verbatimQuote = typeof citation.snippet === "string" ? citation.snippet : "";
@@ -265,6 +267,19 @@
       healthRefresh.disabled = false;
     }
   }
+
+  questionInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!submitButton.disabled) {
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          submitButton.click();
+        }
+      }
+    }
+  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();

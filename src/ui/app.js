@@ -268,6 +268,19 @@
     }
   }
 
+  questionInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!submitButton.disabled) {
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          submitButton.click();
+        }
+      }
+    }
+  });
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     clearError(queryError);
