@@ -33,11 +33,66 @@ logger = logging.getLogger(__name__)
 # Finance-aware tokenizer preserving hyphenated terms and numbers
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+(?:[.,-][a-z0-9]+)*%?")
 
+BM25_QUERY_STOPWORDS = frozenset([
+    "what", "which", "who", "whom", "this", "that", "these", "those",
+    "am", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "having", "do", "does", "did", "doing",
+    "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while",
+    "of", "at", "by", "for", "with", "about", "against", "between", "into", "through",
+    "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out",
+    "on", "off", "over", "under", "again", "further", "then", "once", "here", "there",
+    "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most",
+    "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than",
+    "too", "very", "can", "will", "just", "should", "now",
+    "tell", "give", "show", "find", "state", "reported", "reporting", "fiscal", "year", "years", "end", "ended",
+    "much", "many", "company", "companies", "filing", "filings"
+])
+
 
 def finance_tokenize(text: str) -> List[str]:
     """Tokenize text preserving hyphenated terms and financial numeric strings."""
     tokens = _TOKEN_PATTERN.findall(text.lower())
     return [t for t in tokens if len(t) > 1]
+
+
+def expand_bm25_query_tokens(tokens: List[str]) -> List[str]:
+    """Expand query tokens with financial synonyms and sub-tokens from hyphenated terms."""
+    expanded: List[str] = []
+    for t in tokens:
+        expanded.append(t)
+        if "-" in t:
+            for sub in t.split("-"):
+                if len(sub) > 1 and sub not in BM25_QUERY_STOPWORDS:
+                    expanded.append(sub)
+
+    # Domain financial expansions
+    all_terms = set(expanded)
+    if "expenditures" in all_terms or "spending" in all_terms or "capex" in all_terms:
+        expanded.extend(["additions", "property", "equipment"])
+    if "debt" in all_terms or "capital" in all_terms:
+        expanded.extend(["liabilities", "stockholders", "equity"])
+    if "return" in all_terms and "assets" in all_terms:
+        expanded.extend(["net", "income", "total"])
+    if "return" in all_terms and "equity" in all_terms:
+        expanded.extend(["net", "income", "stockholders"])
+    if "inventory" in all_terms:
+        expanded.append("inventories")
+    if "inventories" in all_terms:
+        expanded.append("inventory")
+    if "revenue" in all_terms:
+        expanded.append("revenues")
+    if "revenues" in all_terms:
+        expanded.append("revenue")
+    if "assets" in all_terms:
+        expanded.append("asset")
+    if "asset" in all_terms:
+        expanded.append("assets")
+    if "liabilities" in all_terms:
+        expanded.append("liability")
+    if "liability" in all_terms:
+        expanded.append("liabilities")
+
+    return list(dict.fromkeys(expanded))
 
 
 @dataclass
@@ -58,10 +113,10 @@ class HybridRRFSearchEngine:
     """
     Hybrid BM25 + FAISS search engine with Reciprocal Rank Fusion.
     """
-    BM25_TOP_K = 30
-    FAISS_TOP_K = 30
+    BM25_TOP_K = 35
+    FAISS_TOP_K = 35
     RRF_K = 60
-    DEFAULT_TOP_K = 12
+    DEFAULT_TOP_K = 20
     TABLE_BOOST = 1.15
 
     def __init__(self, index_dir: str = "data/indices"):
@@ -183,7 +238,9 @@ class HybridRRFSearchEngine:
         # ── BM25 ──
         bm25_ranks: Dict[int, int] = {}
         if self._bm25 is not None:
-            query_tokens = finance_tokenize(query_text)
+            raw_tokens = finance_tokenize(query_text)
+            filtered_tokens = [t for t in raw_tokens if t not in BM25_QUERY_STOPWORDS] or raw_tokens
+            query_tokens = expand_bm25_query_tokens(filtered_tokens)
             if query_tokens:
                 raw_scores = self._bm25.get_scores(query_tokens)
                 filtered_scored = [(idx, raw_scores[idx]) for idx in valid_indices]

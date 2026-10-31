@@ -154,12 +154,22 @@ class ONNXCrossEncoderReranker:
             self._stub_mode = True
             self._loaded = True
 
-    def _score_stub(self, query: str, text: str) -> float:
+    def _score_stub(self, query: str, text: str, p: Optional[PassageResult] = None) -> float:
         """Deterministic heuristic scoring when model weights are not present."""
         q_norm = re.sub(r"\bfy(\d{2,4})\b", r"\1", query.lower())
         stopwords = {
-            "what", "was", "were", "is", "are", "the", "in", "for", "of", "and", "to",
-            "a", "an", "how", "much", "many", "s", "year", "years", "did", "does", "by", "from"
+            "what", "which", "who", "whom", "this", "that", "these", "those",
+            "am", "is", "are", "was", "were", "be", "been", "being",
+            "have", "has", "had", "having", "do", "does", "did", "doing",
+            "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while",
+            "of", "at", "by", "for", "with", "about", "against", "between", "into", "through",
+            "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out",
+            "on", "off", "over", "under", "again", "further", "then", "once", "here", "there",
+            "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most",
+            "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than",
+            "too", "very", "can", "will", "just", "should", "now",
+            "tell", "give", "show", "find", "state", "reported", "reporting", "fiscal", "year", "years", "end", "ended",
+            "much", "many", "company", "companies", "filing", "filings"
         }
         tokens = re.findall(r"[a-z0-9]+", q_norm)
         q_words = {w for w in tokens if len(w) > 1 and w not in stopwords}
@@ -171,8 +181,9 @@ class ONNXCrossEncoderReranker:
 
         # Quantitative / financial statement boost
         fin_terms = {
-            "revenue", "income", "sales", "margin", "earnings", "eps", "operating",
-            "profit", "assets", "liabilities", "cash", "debt", "expense", "expenses"
+            "revenue", "revenues", "income", "sales", "margin", "earnings", "eps", "operating",
+            "profit", "assets", "asset", "liabilities", "liability", "cash", "debt", "expense",
+            "expenses", "balance", "sheet", "sheets", "equity"
         }
         has_fin_q = bool(q_words & fin_terms)
         has_fin_t = bool(t_words & fin_terms)
@@ -180,8 +191,34 @@ class ONNXCrossEncoderReranker:
         if has_fin_q and has_fin_t and has_numbers:
             score += 1.5
 
-        if "consolidated statements" in text.lower() or "summary results" in text.lower() or "operations" in text.lower():
-            score += 0.5
+        txt_lower = text.lower()
+        clean_txt = re.sub(r"\[continued table context.*?\]", "", txt_lower, flags=re.IGNORECASE)
+
+        is_primary_stmt = False
+        if ("balance sheet" in clean_txt or "balance sheets" in clean_txt) and bool(
+            q_words & {"asset", "assets", "liability", "liabilities", "equity", "debt", "balance", "cash"}
+        ):
+            score += 3.0
+            is_primary_stmt = True
+        if ("cash flow" in clean_txt or "cash flows" in clean_txt) and bool(
+            q_words & {"cash", "flow", "flows", "operating", "capex", "expenditures", "spending"}
+        ):
+            score += 2.0
+            is_primary_stmt = True
+        if (
+            "income statement" in clean_txt
+            or "income statements" in clean_txt
+            or "statements of operations" in clean_txt
+            or "statement of operations" in clean_txt
+            or "statements of income" in clean_txt
+        ) and bool(q_words & {"revenue", "revenues", "income", "sales", "margin", "operating"}):
+            score += 3.0
+            is_primary_stmt = True
+
+        if p is not None:
+            if p.has_financial_table or is_primary_stmt:
+                score += 1.0
+            score += p.rrf_score * 30.0
 
         return score
 
@@ -228,7 +265,7 @@ class ONNXCrossEncoderReranker:
 
         if self._stub_mode or self._session is None:
             for p in candidates:
-                logit = self._score_stub(query, p.clean_markdown_text)
+                logit = self._score_stub(query, p.clean_markdown_text, p=p)
                 scored_candidates.append((p, logit))
         else:
             pairs = [(query, p.clean_markdown_text[:512]) for p in candidates]

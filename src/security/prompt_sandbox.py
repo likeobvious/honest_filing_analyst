@@ -92,7 +92,10 @@ class PromptSandbox:
     def _format_evidence(self, passages: List[PassageResult]) -> str:
         blocks = []
         for p in passages:
-            sanitized = self._sanitize_text(p.clean_markdown_text)
+            raw_text = p.clean_markdown_text
+            if len(raw_text) > 1800:
+                raw_text = raw_text[:1800] + "\n...[truncated]"
+            sanitized = self._sanitize_text(raw_text)
             block = (
                 f"--- FILING EXCERPT: {p.pdf_filename} | Page {p.pdf_page_number} ---\n"
                 f"{sanitized}\n"
@@ -106,7 +109,10 @@ class PromptSandbox:
         blocks = []
         for p in passages:
             if hasattr(p, "clean_markdown_text"):
-                txt = self.sanitize_text(p.clean_markdown_text)
+                raw_t = p.clean_markdown_text
+                if len(raw_t) > 1800:
+                    raw_t = raw_t[:1800] + "\n...[truncated]"
+                txt = self.sanitize_text(raw_t)
                 header = f"--- FILING EXCERPT: {getattr(p, 'pdf_filename', '')} | Page {getattr(p, 'pdf_page_number', 1)} ---"
                 blocks.append(f"{header}\n{txt}\n")
             else:

@@ -143,6 +143,21 @@ class QueryCache:
             self._record_hit(qhash)
             return True, self._exact_cache[qhash]
 
+        if str(self.db_path) != ":memory:":
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT response_json FROM query_cache WHERE query_hash = ?",
+                    (qhash,)
+                ).fetchone()
+                if row:
+                    self._exact_cache[qhash] = row[0]
+                    logger.info(f"Cache Tier 1 EXACT HIT (from SQLite) for query: '{query[:60]}'")
+                    self._record_hit(qhash)
+                    return True, row[0]
+            finally:
+                self._close_conn(conn)
+
         # ── Tier 2: Entity-Scoped Semantic Cosine Match (< 28ms) ──
         if query_vector is not None and len(self._semantic_entries) > 0:
             qv = query_vector.astype(np.float32)

@@ -23,7 +23,7 @@ from src.api.schemas import PassageResult, QueryResponse, Citation, SystemStatus
 
 logger = logging.getLogger(__name__)
 
-CB_OPEN_DURATION_SECS = 10.0
+CB_OPEN_DURATION_SECS = 2.5
 CB_CONNECT_TIMEOUT = 1.2
 CB_READ_TIMEOUT = 3.2
 CB_WRITE_TIMEOUT = 1.0
@@ -59,6 +59,7 @@ class LiteLLMCircuitBreaker:
         self.api_key = api_key
         self._stats = CircuitBreakerStats()
         self._lock = asyncio.Lock()
+        self._litellm_down_until: float = 0.0
 
     @property
     def state(self) -> CircuitState:
@@ -98,6 +99,19 @@ class LiteLLMCircuitBreaker:
                 "actual_model": None,
                 "error": "Circuit breaker OPEN: LLM proxy offline.",
             }
+
+        now = time.monotonic()
+        if now < self._litellm_down_until:
+            # LiteLLM proxy port 4000 is known offline; bypass directly to active provider
+            direct_data = await self._call_direct_providers(system_prompt, user_message, max_tokens)
+            if direct_data is not None:
+                async with self._lock:
+                    if self._stats.state == CircuitState.HALF_OPEN:
+                        logger.info("Circuit breaker: HALF_OPEN -> CLOSED.")
+                        self._stats.state = CircuitState.CLOSED
+                        self._stats.failure_count = 0
+                    self._stats.last_success_time = time.monotonic()
+                return direct_data
 
         timeout = httpx.Timeout(
             connect=CB_CONNECT_TIMEOUT,
@@ -154,10 +168,18 @@ class LiteLLMCircuitBreaker:
                 httpx.WriteTimeout, httpx.RemoteProtocolError, httpx.HTTPStatusError) as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
             logger.warning(f"LiteLLM call failed: {error_msg}")
+            if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+                self._litellm_down_until = time.monotonic() + 60.0
 
             # Fallback to direct provider if local LiteLLM proxy container is offline
             direct_data = await self._call_direct_providers(system_prompt, user_message, max_tokens)
             if direct_data is not None:
+                async with self._lock:
+                    if self._stats.state == CircuitState.HALF_OPEN:
+                        logger.info("Circuit breaker: HALF_OPEN -> CLOSED.")
+                        self._stats.state = CircuitState.CLOSED
+                        self._stats.failure_count = 0
+                    self._stats.last_success_time = time.monotonic()
                 return direct_data
 
             async with self._lock:
@@ -194,8 +216,8 @@ class LiteLLMCircuitBreaker:
         if groq_key:
             models_to_try = [
                 os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
+                "allam-2-7b",
                 "openai/gpt-oss-120b",
-                "openai/gpt-oss-20b",
             ]
             for model_name in models_to_try:
                 try:
@@ -207,8 +229,10 @@ class LiteLLMCircuitBreaker:
                         ],
                         "max_tokens": max_tokens,
                         "temperature": LLM_TEMPERATURE,
-                        "response_format": {"type": "json_object"},
                     }
+                    if not model_name.startswith("openai/gpt-oss"):
+                        payload["response_format"] = {"type": "json_object"}
+
                     headers = {
                         "Authorization": f"Bearer {groq_key}",
                         "Content-Type": "application/json",
@@ -225,10 +249,43 @@ class LiteLLMCircuitBreaker:
                             return {
                                 "raw_response": data,
                                 "is_fallback": False,
-                                "provider_switched": False,
+                                "provider_switched": (model_name != os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")),
                                 "actual_model": f"groq/{model_name}",
                                 "error": None,
                             }
+                        elif resp.status_code == 429:
+                            logger.warning(f"Direct Groq model {model_name} rate-limited (429).")
+                            retry_sec = 2.0
+                            try:
+                                hdr = resp.headers.get("retry-after")
+                                if hdr:
+                                    retry_sec = float(hdr)
+                                else:
+                                    import re
+                                    m = re.search(r"try again in ([\d\.]+)s", resp.text)
+                                    if m:
+                                        retry_sec = float(m.group(1))
+                            except Exception:
+                                pass
+
+                            if retry_sec <= 3.5:
+                                await asyncio.sleep(retry_sec + 0.2)
+                                async with httpx.AsyncClient(timeout=8.0) as retry_client:
+                                    retry_resp = await retry_client.post(
+                                        "https://api.groq.com/openai/v1/chat/completions",
+                                        json=payload,
+                                        headers=headers,
+                                    )
+                                    if retry_resp.status_code == 200:
+                                        data = retry_resp.json()
+                                        logger.info(f"Direct Groq retry succeeded using model {model_name}")
+                                        return {
+                                            "raw_response": data,
+                                            "is_fallback": False,
+                                            "provider_switched": False,
+                                            "actual_model": f"groq/{model_name}",
+                                            "error": None,
+                                        }
                 except Exception as e:
                     logger.debug(f"Direct Groq model {model_name} failed: {e}")
 

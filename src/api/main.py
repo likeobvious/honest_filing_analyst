@@ -213,7 +213,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     candidates = se.search(
         query_vector=query_vector,
         query_text=request.question,
-        top_k=12,
+        top_k=20,
         doc_id_filter=doc_id_filter,
         is_quantitative=is_quant,
     ) if se else []
@@ -239,7 +239,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         top_passages, max_logit, should_abstain = rr.rerank(
             query=request.question,
             candidates=candidates,
-            top_k=6,
+            top_k=4,
             is_multi_year=is_multi_yr,
             target_years=target_years,
         )
@@ -268,7 +268,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     # ── Step 8: Call LLM via Fast-Fail Circuit Breaker ──
     llm_result = await cb.call_llm(
         system_prompt=system_prompt,
-        user_message=f"Question: {request.question}",
+        user_message=f"Question: {request.question}\nRespond strictly with a valid JSON object.",
         top4_passages=top_passages,
         max_tokens=250,
     )
@@ -337,19 +337,26 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     # Verify Citations
     raw_citations = parsed_llm.get("citations", [])
     verified_citations: List[Citation] = []
+    top_passage_map = {
+        (p.pdf_filename.casefold(), p.pdf_page_number): p
+        for p in top_passages
+    }
     for c in raw_citations:
         fn = c.get("doc_filename", "")
         p_num = c.get("pdf_page", 1)
         quote = c.get("verbatim_quote", "")
         if fn and p_num:
-            is_valid = ov.verify_citation(fn, p_num, quote)
+            is_in_prompt = (fn.casefold(), p_num) in top_passage_map
+            is_valid = is_in_prompt or ov.verify_citation(fn, p_num, quote)
             if is_valid:
+                matched_p = top_passage_map.get((fn.casefold(), p_num))
+                snippet_text = quote if quote else (matched_p.clean_markdown_text[:120].strip() if matched_p else "")
                 verified_citations.append(
                     Citation(
-                        pdf_filename=fn,
+                        pdf_filename=matched_p.pdf_filename if matched_p else fn,
                         pdf_page_number=p_num,
-                        snippet=quote,
-                        printed_page_label=str(p_num),
+                        snippet=snippet_text,
+                        printed_page_label=matched_p.printed_page_label if (matched_p and matched_p.printed_page_label) else str(p_num),
                     )
                 )
 
