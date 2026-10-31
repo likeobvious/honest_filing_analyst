@@ -156,12 +156,15 @@ class ONNXCrossEncoderReranker:
 
     def _score_stub(self, query: str, text: str) -> float:
         """Deterministic heuristic scoring when model weights are not present."""
-        q_words = set(re.findall(r"[a-z0-9]+", query.lower()))
+        q_norm = re.sub(r"\bfy(\d{2,4})\b", r"\1", query.lower())
+        stopwords = {"what", "was", "were", "is", "are", "the", "in", "for", "of", "and", "to", "a", "an", "how", "much", "many"}
+        q_words = set(re.findall(r"[a-z0-9]+", q_norm)) - stopwords
         t_words = set(re.findall(r"[a-z0-9]+", text.lower()))
         if not q_words:
             return -5.0
         overlap = len(q_words & t_words) / len(q_words)
-        return -2.5 + (overlap * 4.0)
+        boost = 0.5 if "consolidated statements" in text.lower() or "operations" in text.lower() else 0.0
+        return -2.5 + (overlap * 4.0) + boost
 
     def rerank(
         self,

@@ -22,6 +22,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from src.api.schemas import (
     QueryRequest, QueryResponse, Citation, SystemStatus,
@@ -287,7 +290,14 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     try:
         usage = raw_resp.get("usage", {})
         tokens_used = usage.get("total_tokens", 0)
-        content_str = raw_resp["choices"][0]["message"]["content"]
+        content_str = raw_resp["choices"][0]["message"]["content"].strip()
+        if content_str.startswith("```"):
+            lines = content_str.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            content_str = "\n".join(lines).strip()
         parsed_llm = json.loads(content_str)
     except Exception as exc:
         logger.warning(f"Failed to parse LLM JSON output: {exc}. Falling back to raw passages.")

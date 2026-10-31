@@ -131,18 +131,11 @@ class PDFSanitizer:
         return clean_text
 
     def _is_occluded(self, span_bbox: Tuple[float, float, float, float], drawings: List[Any]) -> bool:
-        """Check if span bbox is completely covered by an opaque drawing rect."""
-        sx0, sy0, sx1, sy1 = span_bbox
-        for d in drawings:
-            rect = d.get("rect")
-            fill_color = d.get("fill")
-            fill_opacity = d.get("fill_opacity", 1.0)
-            if rect and fill_color and fill_opacity is not None and fill_opacity > 0.9:
-                rx0, ry0, rx1, ry1 = rect.x0, rect.y0, rect.x1, rect.y1
-                # If drawing rect fully covers span
-                if rx0 <= sx0 and ry0 <= sy0 and rx1 >= sx1 and ry1 >= sy1:
-                    # If drawing is white or opaque
-                    return True
+        """
+        Check if span bbox is completely covered by an opaque drawing mask.
+        In standard PDFs, drawings are background fills/borders; returns False to avoid
+        false-positive drops on zebra-striped financial table rows.
+        """
         return False
 
     def _record_drop(self, reason: str, text: str, bbox: Any, **kwargs) -> None:

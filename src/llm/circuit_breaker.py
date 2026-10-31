@@ -9,6 +9,7 @@ Handles:
 - While OPEN: skips network entirely, returns Top-4 passages (<750ms)
 - Provider switch detection (Groq -> OpenRouter / Gemini)
 """
+import os
 import time
 import logging
 import asyncio
@@ -154,6 +155,11 @@ class LiteLLMCircuitBreaker:
             error_msg = f"{type(exc).__name__}: {exc}"
             logger.warning(f"LiteLLM call failed: {error_msg}")
 
+            # Fallback to direct provider if local LiteLLM proxy container is offline
+            direct_data = await self._call_direct_providers(system_prompt, user_message, max_tokens)
+            if direct_data is not None:
+                return direct_data
+
             async with self._lock:
                 self._stats.failure_count += 1
                 self._stats.total_failures += 1
@@ -173,6 +179,101 @@ class LiteLLMCircuitBreaker:
                 "actual_model": None,
                 "error": error_msg,
             }
+
+    async def _call_direct_providers(
+        self,
+        system_prompt: str,
+        user_message: str,
+        max_tokens: int = LLM_MAX_TOKENS,
+    ) -> Optional[Dict[str, Any]]:
+        """Direct LLM provider fallback when local LiteLLM proxy container is offline."""
+        groq_key = os.getenv("GROQ_API_KEY", "").strip()
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+
+        # 1. Direct Groq API
+        if groq_key:
+            models_to_try = [
+                os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
+                "llama-3.3-70b-versatile",
+                "openai/gpt-oss-120b",
+            ]
+            for model_name in models_to_try:
+                try:
+                    payload = {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        "max_tokens": max_tokens,
+                        "temperature": LLM_TEMPERATURE,
+                        "response_format": {"type": "json_object"},
+                    }
+                    headers = {
+                        "Authorization": f"Bearer {groq_key}",
+                        "Content-Type": "application/json",
+                    }
+                    async with httpx.AsyncClient(timeout=8.0) as client:
+                        resp = await client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            json=payload,
+                            headers=headers,
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            logger.info(f"Direct Groq call succeeded using model {model_name}")
+                            return {
+                                "raw_response": data,
+                                "is_fallback": False,
+                                "provider_switched": False,
+                                "actual_model": f"groq/{model_name}",
+                                "error": None,
+                            }
+                except Exception as e:
+                    logger.debug(f"Direct Groq model {model_name} failed: {e}")
+
+        # 2. Direct OpenRouter API
+        if openrouter_key:
+            or_models = [
+                os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
+                "qwen/qwen-2.5-72b-instruct",
+            ]
+            for model_name in or_models:
+                try:
+                    payload = {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        "max_tokens": max_tokens,
+                        "temperature": LLM_TEMPERATURE,
+                        "response_format": {"type": "json_object"},
+                    }
+                    headers = {
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json",
+                    }
+                    async with httpx.AsyncClient(timeout=8.0) as client:
+                        resp = await client.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            json=payload,
+                            headers=headers,
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            logger.info(f"Direct OpenRouter call succeeded using model {model_name}")
+                            return {
+                                "raw_response": data,
+                                "is_fallback": False,
+                                "provider_switched": True,
+                                "actual_model": f"openrouter/{model_name}",
+                                "error": None,
+                            }
+                except Exception as e:
+                    logger.debug(f"Direct OpenRouter model {model_name} failed: {e}")
+
+        return None
 
     def build_fallback_response(
         self,
