@@ -65,6 +65,7 @@ services:
       DATA_DIR: /app/data
       MODELS_DIR: /app/models
       FRONTEND_DIR: /app/frontend
+      UI_DIR: /app/src/ui
       OMP_NUM_THREADS: "2"
       ORT_INTRA_OP_NUM_THREADS: "2"
       OMP_WAIT_POLICY: "PASSIVE"

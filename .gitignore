@@ -55,3 +55,6 @@ PS5 Honest Filing Analyst.md
 IMPLEMENTATION_GUIDE_AND_TEAM_PLAN.md
 execution_plan.md
 
+# ── Eval test runs ─────────────────────────────────────────────────────────────
+eval/results_*.json
+

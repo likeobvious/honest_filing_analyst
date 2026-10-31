@@ -36,12 +36,12 @@ switch ($Command.ToLower()) {
     "serve" {
         Write-Host "Starting PS5 Honest Filing Analyst on http://localhost:8000..." -ForegroundColor Green
         $env:PYTHONPATH = (Get-Location).Path
-        py -3.12 -m uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+        py -3.12 -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
     }
     "ingest" {
-        Write-Host "Running offline ingestion pipeline..." -ForegroundColor Green
+        Write-Host "Running offline ingestion pipeline (PyMuPDF Sanitizer + Table Chunker + BM25)..." -ForegroundColor Green
         $env:PYTHONPATH = (Get-Location).Path
-        py -3.12 scripts/ingest_offline.py --pdf-dir data/pdfs --output-dir data/indices
+        py -3.12 -m src.ingest.build_index --pdf-dir data/pdfs --output-dir data/indices
     }
     "eval" {
         Write-Host "Running benchmark evaluation on http://localhost:8000..." -ForegroundColor Green
