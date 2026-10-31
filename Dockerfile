@@ -37,7 +37,6 @@ COPY src/ /app/src/
 COPY app/ /app/app/
 COPY litellm_config.yaml /app/litellm_config.yaml
 COPY config/ /app/config/
-COPY frontend/ /app/frontend/
 
 RUN mkdir -p /app/data/pdfs /app/data/indices
 

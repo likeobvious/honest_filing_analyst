@@ -64,8 +64,8 @@ services:
       DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:-litellm_secret}@postgres:5432/litellm_db
       DATA_DIR: /app/data
       MODELS_DIR: /app/models
-      FRONTEND_DIR: /app/frontend
       UI_DIR: /app/src/ui
+      FRONTEND_DIR: /app/src/ui
       OMP_NUM_THREADS: "2"
       ORT_INTRA_OP_NUM_THREADS: "2"
       OMP_WAIT_POLICY: "PASSIVE"

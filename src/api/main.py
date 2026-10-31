@@ -505,9 +505,10 @@ def create_app() -> FastAPI:
     app.include_router(router)
 
     # Mount UI
-    ui_dir_path = Path("src/ui")
+    ui_dir_env = os.getenv("UI_DIR", os.getenv("FRONTEND_DIR", "src/ui"))
+    ui_dir_path = Path(ui_dir_env)
     if not ui_dir_path.exists() or not (ui_dir_path / "index.html").exists():
-        ui_dir_path = Path("frontend")
+        ui_dir_path = Path("src/ui")
 
     if ui_dir_path.exists() and (ui_dir_path / "index.html").exists():
         app.mount("/", StaticFiles(directory=str(ui_dir_path), html=True), name="ui")
