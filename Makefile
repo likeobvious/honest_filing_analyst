@@ -30,12 +30,17 @@ logs-app: ## Tail logs from the main app container only
 restart: ## Restart all services
 	$(COMPOSE) restart
 
-# ── Model Downloads ───────────────────────────────────────────────────────────
+# ── Model & Data Downloads ───────────────────────────────────────────────────
 
 download-models: ## Download and INT8-quantize bge-small and bge-reranker ONNX models (~420 MB total)
 	@mkdir -p $(MODELS_DIR)
 	$(PYTHON) scripts/download_models.py --output-dir $(MODELS_DIR)
 	@echo "✅ Models ready in $(MODELS_DIR)/"
+
+download-pdfs: ## Download sample 10-K PDFs from FinanceBench into data/pdfs/
+	@mkdir -p $(PDF_DIR)
+	$(PYTHON) scripts/download_sample_pdfs.py --limit 15
+	@echo "✅ PDFs ready in $(PDF_DIR)/"
 
 # ── PDF Ingestion ─────────────────────────────────────────────────────────────
 
