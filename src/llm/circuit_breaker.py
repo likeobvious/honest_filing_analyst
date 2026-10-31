@@ -194,8 +194,8 @@ class LiteLLMCircuitBreaker:
         if groq_key:
             models_to_try = [
                 os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
-                "llama-3.3-70b-versatile",
                 "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
             ]
             for model_name in models_to_try:
                 try:
