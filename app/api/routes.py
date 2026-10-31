@@ -129,9 +129,14 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         fiscal_year_hint=request.fiscal_year,
     ) if qp else None
 
-    # Immediate abstention: company not in corpus (0 tokens)
-    if parsed and parsed.company_not_in_corpus:
+    # Immediate abstention: company or fiscal year not in corpus (0 tokens)
+    if parsed and (parsed.company_not_in_corpus or parsed.year_not_in_corpus):
         latency_ms = (time.perf_counter() - wall_start) * 1000
+        reason = (
+            "The requested company is not present in the document corpus."
+            if parsed.company_not_in_corpus
+            else f"No 10-K filing available for the requested fiscal year(s): {parsed.fiscal_years}."
+        )
         return QueryResponse(
             answer="Not in the documents.",
             is_abstention=True,
@@ -141,7 +146,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
                 execution_mode="ABSTENTION",
                 ui_status_banner={
                     "level": "INFO",
-                    "message": "The requested company is not present in the document corpus.",
+                    "message": reason,
                 },
             ),
         )

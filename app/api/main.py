@@ -56,7 +56,7 @@ INDEX_DIR = DATA_DIR / "indices"
 MODELS_DIR = Path(os.getenv("MODELS_DIR", "models"))
 PDF_DIR = DATA_DIR / "pdfs"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", "frontend"))
-LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://litellm-proxy:4000/v1")
+LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "sk-ps5-team-key")
 
 

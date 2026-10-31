@@ -3,9 +3,10 @@
     Windows PowerShell helper script for PS5 Honest Filing Analyst (equivalent to Makefile).
 
 .EXAMPLE
-    .\run.ps1 download-pdfs
+    .\run.ps1 serve
     .\run.ps1 test
-    .\run.ps1 download-models
+    .\run.ps1 eval
+    .\run.ps1 download-pdfs
 #>
 
 param (
@@ -20,8 +21,11 @@ $ErrorActionPreference = "Stop"
 
 function Show-Help {
     Write-Host "PS5 Honest Filing Analyst - PowerShell Commands:" -ForegroundColor Cyan
-    Write-Host "  .\run.ps1 download-pdfs      - Download sample 10-K PDFs into data/pdfs/"
+    Write-Host "  .\run.ps1 serve              - Start backend + frontend server at http://localhost:8000"
+    Write-Host "  .\run.ps1 ingest             - Run offline PDF parsing & BM25 indexing"
     Write-Host "  .\run.ps1 test               - Run unit tests (tests/test_teammate1.py)"
+    Write-Host "  .\run.ps1 eval               - Run golden benchmark eval suite against local API"
+    Write-Host "  .\run.ps1 download-pdfs      - Download sample 10-K PDFs into data/pdfs/"
     Write-Host "  .\run.ps1 download-models    - Download & quantize ONNX models"
     Write-Host "  .\run.ps1 up                 - Start Docker Compose stack"
     Write-Host "  .\run.ps1 down               - Stop Docker Compose stack"
@@ -29,6 +33,21 @@ function Show-Help {
 }
 
 switch ($Command.ToLower()) {
+    "serve" {
+        Write-Host "Starting PS5 Honest Filing Analyst on http://localhost:8000..." -ForegroundColor Green
+        $env:PYTHONPATH = (Get-Location).Path
+        py -3.12 -m uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    }
+    "ingest" {
+        Write-Host "Running offline ingestion pipeline..." -ForegroundColor Green
+        $env:PYTHONPATH = (Get-Location).Path
+        py -3.12 scripts/ingest_offline.py --pdf-dir data/pdfs --output-dir data/indices
+    }
+    "eval" {
+        Write-Host "Running benchmark evaluation on http://localhost:8000..." -ForegroundColor Green
+        $env:PYTHONPATH = (Get-Location).Path
+        py -3.12 eval/run_eval.py --api-url http://localhost:8000 $ArgsList
+    }
     "download-pdfs" {
         Write-Host "Downloading FinanceBench sample PDFs..." -ForegroundColor Green
         py -3.12 scripts/download_sample_pdfs.py --limit 15 $ArgsList

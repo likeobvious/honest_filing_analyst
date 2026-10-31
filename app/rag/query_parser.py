@@ -27,6 +27,24 @@ FISCAL_YEAR_PATTERN = re.compile(
 )
 BARE_YEAR_PATTERN = re.compile(r"\b(20(?:0[0-9]|1[0-9]|2[0-9]|3[0]))\b")
 
+COMMON_FINANCIAL_WORDS = frozenset([
+    "WHAT", "WHEN", "WHERE", "WHICH", "WHO", "WHY", "HOW", "THE", "FOR",
+    "AND", "CAN", "ARE", "WAS", "WERE", "WITH", "FROM", "THAT", "THIS",
+    "TOTAL", "GROSS", "NET", "GAAP", "NON-GAAP", "SEC", "USD", "RATE"
+])
+
+KNOWN_EXTERNAL_COMPANIES: Dict[str, str] = {
+    "tesla": "TSLA", "tsla": "TSLA",
+    "nvidia": "NVDA", "nvda": "NVDA",
+    "google": "GOOGL", "googl": "GOOGL", "alphabet": "GOOGL",
+    "meta": "META", "facebook": "META",
+    "oracle": "ORCL", "orcl": "ORCL",
+    "intel": "INTC", "intc": "INTC",
+    "jpmorgan": "JPM", "jpm": "JPM",
+    "ford": "F", "general motors": "GM",
+    "berkshire": "BRK",
+}
+
 QUANTITATIVE_KEYWORDS = frozenset([
     "margin", "change", "growth", "ratio", "compare", "comparison",
     "year-over-year", "yoy", "increase", "decrease", "percentage", "%",
@@ -180,16 +198,30 @@ class QueryParser:
 
         # ── 2. Extract Tickers / Company Names ──
         tickers: Set[str] = set()
+        q_lower = question.lower()
+
         if ticker_hint:
             tickers.add(ticker_hint.upper())
 
+        # Check uppercase ticker symbols in original question
         for token in re.findall(r"\b[A-Z]{2,5}\b", question):
-            if self._ticker_to_docids and token in self._ticker_to_docids:
+            if token not in COMMON_FINANCIAL_WORDS:
                 tickers.add(token)
 
+        # Check known corpus company names / aliases
         for alias, ticker in self._name_to_ticker.items():
-            if alias in normalized:
+            if re.search(r"\b" + re.escape(alias) + r"\b", q_lower):
                 tickers.add(ticker.upper())
+
+        # Check corpus tickers (e.g. 'msft', 'amzn') in lowercase
+        for t in self._ticker_to_docids:
+            if re.search(r"\b" + re.escape(t.lower()) + r"\b", q_lower):
+                tickers.add(t)
+
+        # Check external companies known not to be in corpus
+        for ext_name, ext_ticker in KNOWN_EXTERNAL_COMPANIES.items():
+            if re.search(r"\b" + re.escape(ext_name) + r"\b", q_lower):
+                tickers.add(ext_ticker.upper())
 
         result.tickers = sorted(tickers)
 
