@@ -102,11 +102,13 @@ class ASTCalculator:
         self,
         formula_expression: str,
         rounding_decimals: int = 2,
+        round_digits: Optional[int] = None,
     ) -> Tuple[Optional[float], Optional[str]]:
         """Safely compute formula expression and return (float_result, error_message)."""
+        decimals = round_digits if round_digits is not None else rounding_decimals
         try:
             dec_result = self.evaluate(formula_expression)
-            rounded = round(float(dec_result), rounding_decimals)
+            rounded = round(float(dec_result), decimals)
             return rounded, None
         except (ValueError, ZeroDivisionError, InvalidOperation, OverflowError) as exc:
             logger.warning(f"ASTCalculator error on '{formula_expression}': {exc}")

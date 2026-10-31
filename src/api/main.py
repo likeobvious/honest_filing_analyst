@@ -461,6 +461,7 @@ def _deliver_pdf(filename: str) -> FileResponse:
         path=str(pdf_path),
         media_type="application/pdf",
         filename=filename,
+        content_disposition_type="inline",
     )
 
 

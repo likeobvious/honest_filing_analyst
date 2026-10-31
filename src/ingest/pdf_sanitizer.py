@@ -11,7 +11,7 @@ Sanitizes raw PDF pages via PyMuPDF (fitz):
   - Records dropped injection attempts for security audit logs.
 """
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,30 +26,22 @@ class PDFSanitizer:
         self.dropped_spans_count = 0
         self.audit_events: List[Dict[str, Any]] = []
 
-    def sanitize_page_text(self, page) -> str:
+    def sanitize_page_dict(
+        self,
+        raw: Dict[str, Any],
+        cropbox: Any = (0, 0, 612, 792),
+        drawings: Optional[List[Any]] = None,
+    ) -> Tuple[str, int]:
         """
-        Extract clean text from PyMuPDF page, filtering adversarial spans.
-        Falls back to page.get_text() if rawdict is not available.
+        Sanitize a raw PyMuPDF page dictionary and return (clean_text, dropped_count).
         """
-        try:
-            raw = page.get_text("dict")
-        except Exception:
-            try:
-                return page.get_text()
-            except Exception:
-                return ""
+        initial_drops = self.dropped_spans_count
+        if isinstance(cropbox, (list, tuple)) and len(cropbox) >= 4:
+            cx0, cy0, cx1, cy1 = cropbox[0], cropbox[1], cropbox[2], cropbox[3]
+        else:
+            cx0, cy0, cx1, cy1 = cropbox.x0, cropbox.y0, cropbox.x1, cropbox.y1
 
-        cropbox = page.cropbox
-        cx0, cy0, cx1, cy1 = cropbox.x0, cropbox.y0, cropbox.x1, cropbox.y1
-
-        opaque_drawings = []
-        try:
-            for d in page.get_drawings():
-                if d.get("fill") and d.get("fill_opacity", 1.0) > 0.9 and d.get("rect"):
-                    opaque_drawings.append(d)
-        except Exception:
-            pass
-
+        opaque_drawings = drawings or []
         clean_lines: List[str] = []
 
         for block in raw.get("blocks", []):
@@ -89,7 +81,6 @@ class PDFSanitizer:
 
                     # 4. White-on-white text (R, G, B > 240)
                     color = span.get("color", 0)
-                    # Color in PyMuPDF can be an int (sRGB 0xRRGGBB) or tuple
                     if isinstance(color, int):
                         r = (color >> 16) & 0xFF
                         g = (color >> 8) & 0xFF
@@ -113,7 +104,31 @@ class PDFSanitizer:
                 if line_spans_text:
                     clean_lines.append(" ".join(line_spans_text))
 
-        return "\n".join(clean_lines)
+        return "\n".join(clean_lines), self.dropped_spans_count - initial_drops
+
+    def sanitize_page_text(self, page) -> str:
+        """
+        Extract clean text from PyMuPDF page, filtering adversarial spans.
+        """
+        try:
+            raw = page.get_text("dict")
+        except Exception:
+            try:
+                return page.get_text()
+            except Exception:
+                return ""
+
+        cropbox = page.cropbox
+        opaque_drawings = []
+        try:
+            for d in page.get_drawings():
+                if d.get("fill") and d.get("fill_opacity", 1.0) > 0.9 and d.get("rect"):
+                    opaque_drawings.append(d)
+        except Exception:
+            pass
+
+        clean_text, _ = self.sanitize_page_dict(raw, cropbox, opaque_drawings)
+        return clean_text
 
     def _is_occluded(self, span_bbox: Tuple[float, float, float, float], drawings: List[Any]) -> bool:
         """Check if span bbox is completely covered by an opaque drawing rect."""
@@ -140,3 +155,15 @@ class PDFSanitizer:
         }
         self.audit_events.append(event)
         logger.debug(f"Sanitizer dropped span ({reason}): {text[:40]}")
+
+
+def sanitize_page_dict(
+    raw: Dict[str, Any],
+    cropbox: Any = (0, 0, 612, 792),
+    drawings: Optional[List[Any]] = None,
+    sanitizer: Optional[PDFSanitizer] = None,
+) -> Tuple[str, int]:
+    """Module-level helper to sanitize a raw PyMuPDF page dictionary."""
+    s = sanitizer or PDFSanitizer()
+    return s.sanitize_page_dict(raw, cropbox, drawings)
+
